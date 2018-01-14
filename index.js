@@ -5,6 +5,7 @@ const path = require('path')
 const yaml = require('js-yaml')
 const jimp = require('jimp')
 const open = require('open')
+const keypress = require('keypress')
 const exec = require('child-process-promise').exec
 const OcrClient = require("baidu-aip-sdk").ocr
 
@@ -53,6 +54,7 @@ class ChongdingHelper {
 
     await exec(`adb shell screencap -p /sdcard/${screenshotName}`)
     await exec(`adb pull /sdcard/${screenshotName} ${__dirname}`)
+    await exec(`adb shell rm /sdcard/${screenshotName}`)
     return path.join(__dirname, screenshotName)
   }
 
@@ -90,8 +92,7 @@ class ChongdingHelper {
   async ocr(image) {
     const base64Image = image.toString("base64")
     const result = await this.ocrClient.generalBasic(base64Image, OCR_OPTIONS)
-    console.log(result)
-    return result.words_result.map(res => res.words).join('').replace(/^\d+/, '')
+    return result.words_result.map(res => res.words).join('').replace(/^\d+./, '')
   }
 
   async ocrQuestion(image) {
@@ -108,7 +109,7 @@ class ChongdingHelper {
    * @returns {undefined}
    */
   async run() {
-    console.time('run')
+    console.time('[TIME]')
 
     const screenshot = await this.screencap()
     const image = await jimp.read(screenshot)
@@ -118,10 +119,27 @@ class ChongdingHelper {
 
     await this.removeScreenshot(screenshot)
 
-    console.timeEnd('run')
+    console.timeEnd('[TIME]')
+    return question
   }
 }
 
+keypress(process.stdin)
 const c = new ChongdingHelper()
-c.run()
+console.log('[INFO]: Starting success..')
+console.log('[HELP]: Press any key to run...')
+
+process.stdin.on('keypress', (ch, key) => {
+  if (key && key.ctrl && key.name == 'c') {
+    process.stdin.pause()
+  } else {
+    c.run().then(question => {
+      console.log(`[INFO]: Question: ${question}`)
+    })
+  }
+})
+ 
+process.stdin.setRawMode(true)
+process.stdin.resume()
+
 
