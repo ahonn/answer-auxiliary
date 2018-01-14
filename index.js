@@ -5,8 +5,6 @@ const path = require('path')
 const yaml = require('js-yaml')
 const jimp = require('jimp')
 const open = require('open')
-const nodejieba = require('nodejieba')
-const request = require('request-promise')
 const exec = require('child-process-promise').exec
 const OcrClient = require("baidu-aip-sdk").ocr
 
@@ -23,12 +21,22 @@ class ChongdingHelper {
     this.ocrClient = this.loadOcrClient()
   }
 
+  /**
+   * load config file (question position & baidu api key)
+   *
+   * @returns {object} config
+   */
   loadConfig() {
     const configPath = path.join(__dirname, 'config.yml')
     const config = yaml.safeLoad(fs.readFileSync(configPath, 'utf-8'))
     return config
   }
 
+  /**
+   * load baidu ocr client
+   *
+   * @returns {object} ocr client
+   */
   loadOcrClient() {
     const { app_id, app_key, secret_key } = this.config.ocr
     const ocrClient = new OcrClient(app_id, app_key, secret_key)
@@ -66,7 +74,6 @@ class ChongdingHelper {
    * @returns {string} image base64
    */
   async imageCrop(image, option) {
-    // const image = await jimp.read(screenshot)
     image.crop(option.x, option.y, option.width, option.height)
 
     return new Promise((resolve) => {
@@ -83,6 +90,7 @@ class ChongdingHelper {
   async ocr(image) {
     const base64Image = image.toString("base64")
     const result = await this.ocrClient.generalBasic(base64Image, OCR_OPTIONS)
+    console.log(result)
     return result.words_result.map(res => res.words).join('').replace(/^\d+/, '')
   }
 
@@ -90,33 +98,23 @@ class ChongdingHelper {
     const { question: questionOption } = this.config
 
     const questionImage = await this.imageCrop(image, questionOption)
-    const questionStr = await this.ocr(questionImage)
-    const question = nodejieba.extract(questionStr, 4).map(res => res.word)
+    const question = await this.ocr(questionImage)
     return question
   }
 
-  // async ocrChoices(image) {
-    // const { choice: choiceOption } = this.config
-    // const choiceImage = await this.imageCrop(image, choiceOption)
-    // const choices = await this.ocr(choiceImage)
-    // return choices
-  // }
-
+  /**
+   * run script
+   *
+   * @returns {undefined}
+   */
   async run() {
     console.time('run')
 
     const screenshot = await this.screencap()
     const image = await jimp.read(screenshot)
 
-    await Promise.all([
-      this.ocrQuestion(image.clone()),
-      // this.ocrChoices(image.clone()),
-    ]).then(async ([question/*, choices*/]) => {
-      // const html = await request(BAIDU_ZHIDAO_URL + question.join('%20'))
-      // console.log(html)
-      
-      open(BAIDU_ZHIDAO_URL + question.join(' '))
-    })
+    const question = await this.ocrQuestion(image)
+    open(BAIDU_ZHIDAO_URL + question)
 
     await this.removeScreenshot(screenshot)
 
