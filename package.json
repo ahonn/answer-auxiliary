@@ -1,0 +1,21 @@
+{
+  "name": "chongding-helper",
+  "version": "1.0.0",
+  "description": "chongding helper script",
+  "main": "index.js",
+  "keywords": [],
+  "author": "ahonn <ahonn95@outlook.com>",
+  "license": "MIT",
+  "dependencies": {
+    "baidu-aip-sdk": "^2.1.0",
+    "child-process-promise": "^2.2.1",
+    "install": "^0.10.2",
+    "jimp": "^0.2.28",
+    "js-yaml": "^3.10.0",
+    "nodejieba": "^2.2.5",
+    "npm": "^5.6.0",
+    "open": "^0.0.5",
+    "request": "^2.83.0",
+    "request-promise": "^4.2.2"
+  }
+}

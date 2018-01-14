@@ -1,0 +1,16 @@
+question:
+  x: 45
+  y: 240
+  width: 620
+  height: 140
+
+choice:
+  x: 45
+  y: 380
+  width: 620
+  height: 330 
+
+ocr:
+  app_id: ""
+  app_key: ""
+  secret_key: ""
