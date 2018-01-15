@@ -13,19 +13,19 @@
 ## 使用方式
 
 - 安装脚本依赖
-```
+```bash
 $ git clone --depth=1 https://github.com/ahonn/chongding-helper.git
 $ cd chongding-helper
 $ yarn install # or npm install
 ```
 
 - 添加配置文件
-```
+```bash
 $ touch config.yml
 ```
 
 内容如下：
-```
+```yaml
 question:
   x: 45 # 问题区域左上角 x 坐标
   y: 240 # 问题区域左上角 y 坐标
@@ -52,7 +52,7 @@ ocr:
 通过 USB 连接 Android 设备，需要开启 USB 调试
 
 运行 `adb devices` 查看连接设备
-```
+```bash
 $ adb devices
 
 # List of devices attached
