@@ -6,6 +6,7 @@ const yaml = require('js-yaml')
 const jimp = require('jimp')
 const keypress = require('keypress')
 const cheerio = require('cheerio')
+const jieba = require("nodejieba")
 const exec = require('child-process-promise').exec
 const OcrClient = require("baidu-aip-sdk").ocr
 const puppeteer = require('puppeteer')
@@ -80,33 +81,72 @@ class ChongdingHelper {
   /**
    * ocr image (Baidu Api)
    *
-   * @param {buffer} image ocr image buffer
+   * @param {object} image jimp imgae
+   * @param {object} option region option(x, y, width, height)
    * @returns {string} ocr result
    */
-  async ocr(image) {
-    const base64Image = image.toString("base64")
+  async ocrImage(image, option) {
+    const region = await this.imageCrop(image, option)
+    const base64Image = region.toString("base64")
     // const result = await this.ocrClient.accurateBasic(base64Image, OCR_OPTIONS)
     const result = await this.ocrClient.generalBasic(base64Image, OCR_OPTIONS)
     return result.words_result
   }
 
   /**
-   * ocr Image
+   * ocr question region
    *
-   * @param {object} image jimp imgae
-   * @param {object} option region option(x, y, width, height)
-   * @returns {string} question string
+   * @param {object} image jimp image
+   * @returns {object} question(text, keyword)
    */
-  async ocrImage(image, option) {
-    const region = await this.imageCrop(image, option)
-    const result = await this.ocr(region)
-    return result
+  async ocrQuestion(image) {
+    const { question: questionOption } = this.config
+    const questionRes = await this.ocrImage(image.clone(), questionOption)
+
+    const text = questionRes.map(res => res.words).join('')
+    // remove order number and special symbols
+    const pureText = text.replace(/^\d+/, '')
+                         .replace(/[《》]/g, '')
+
+    const keyword = jieba.extract(pureText, 5)
+    const question = {
+      text,
+      keyword,
+    }
+    return question
   }
 
+  /**
+   * ocr choices region
+   *
+   * @param {object} image jimp image
+   * @returns {array} choice array
+   */
+  async ocrChoices(image) {
+    const { choices: choicesOption } = this.config
+    const choicesRes = await this.ocrImage(image.clone(), choicesOption)
+
+    let choices = choicesRes.map(res => res.words)
+    if (choices.length === 1) {
+      choices = jieba.cut(choices[0])
+    }
+    return choices
+  }
+
+  /**
+   * analyze choices by baidu zhidao
+   *
+   * @param {object} question
+   * @param {array} choices
+   * @returns {array} choice result array
+   */
   async analyzeChoices(question, choices) {
-    const url = BAIDU_ZHIDAO_URL + question
+    const search = question.keyword.map(res => res.word).join(' ')
+    const url = BAIDU_ZHIDAO_URL + search
+
     await this.puppeteer.page.goto(url)
     const html = await this.puppeteer.page.content()
+    // strip html and trailing white spaces
     const text = cheerio.load(html).text().replace(/^\s+|\s+$/gm, '')
 
     const result = choices.map(choice => {
@@ -128,33 +168,16 @@ class ChongdingHelper {
     const screenshot = await this.screencap()
     const image = await jimp.read(screenshot)
 
-    const ocrQuestion = async () => {
-      const { question: questionOption } = this.config
-      const questionRes = await this.ocrImage(image.clone(), questionOption)
-      const question = questionRes.map(res => res.words).join('')
-      return question
-    }
-
-    const ocrChoices = async () => {
-      const { choices: choicesOption } = this.config
-      const choicesRes = await this.ocrImage(image.clone(), choicesOption)
-      const choices = choicesRes.map(res => res.words)
-      return choices
-    }
-
     await Promise.all([
-      ocrQuestion(),
-      ocrChoices()
+      this.ocrQuestion(image.clone()),
+      this.ocrChoices(image.clone()),
     ]).then(async ([question, choices]) => {
-      console.log(`Question: ${question}`)
+      console.log(`Question: ${question.text}`)
 
       const results = await this.analyzeChoices(question, choices)
       results.forEach(res => {
         console.log(`Choice: ${res.name} - ${res.count}`)
       })
-
-      const answer = (results.sort((a, b) => a.count < b.count))[0]
-      console.log(`Answer: 『${answer.name}』`)
     })
   }
 }
@@ -189,6 +212,4 @@ c.init()
     process.stdin.setRawMode(true)
     process.stdin.resume()
   })
-
-
 
