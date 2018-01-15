@@ -3,7 +3,7 @@
 
 仅限于 Android 平台
 
-![gif](http://ouv0frko5.bkt.clouddn.com/blog/uvh4k.gif)
+![](http://ouv0frko5.bkt.clouddn.com/blog/uvh4k.gif)
 
 ## 脚本原理
 - adb shell 获取 Android 设备上的截图
