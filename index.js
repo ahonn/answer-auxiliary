@@ -4,10 +4,11 @@ const fs = require('fs')
 const path = require('path')
 const yaml = require('js-yaml')
 const jimp = require('jimp')
-const open = require('open')
 const keypress = require('keypress')
+const cheerio = require('cheerio')
 const exec = require('child-process-promise').exec
 const OcrClient = require("baidu-aip-sdk").ocr
+const puppeteer = require('puppeteer')
 
 const OCR_OPTIONS = {
   "language_type": "CHN_ENG",
@@ -18,30 +19,34 @@ const BAIDU_ZHIDAO_URL = `https://zhidao.baidu.com/search?word=`
 class ChongdingHelper {
   constructor() {
     this.timestamp = Date.now()
-    this.config = this.loadConfig()
-    this.ocrClient = this.loadOcrClient()
+    this.config = null
+    this.ocrClient = null
+    this.puppeteer = null
   }
 
-  /**
-   * load config file (question position & baidu api key)
-   *
-   * @returns {object} config
-   */
-  loadConfig() {
+  async init() {
+    // load config
     const configPath = path.join(__dirname, 'config.yml')
-    const config = yaml.safeLoad(fs.readFileSync(configPath, 'utf-8'))
-    return config
+    this.config = yaml.safeLoad(fs.readFileSync(configPath, 'utf-8'))
+
+    // init ocr client
+    const { app_id, app_key, secret_key } = this.config.ocr
+    this.ocrClient = new OcrClient(app_id, app_key, secret_key)
+
+    // init puppeteer browser page
+    const browser = await puppeteer.launch()
+    const page = await browser.newPage()
+    this.puppeteer = {
+      browser,
+      page
+    }
   }
 
-  /**
-   * load baidu ocr client
-   *
-   * @returns {object} ocr client
-   */
-  loadOcrClient() {
-    const { app_id, app_key, secret_key } = this.config.ocr
-    const ocrClient = new OcrClient(app_id, app_key, secret_key)
-    return ocrClient
+  async close() {
+    try {
+      await exec('rm screenshot-*')
+    } catch (e) {}
+    await this.puppeteer.browser.close()
   }
 
   /**
@@ -55,16 +60,6 @@ class ChongdingHelper {
 
     await exec(`adb shell screencap -p > ${screenshotPath}`)
     return screenshotPath
-  }
-
-  /**
-   * remove screenshot
-   *
-   * @param {string} path screenshot path
-   * @returns {undefined}
-   */
-  async removeScreenshot(path) {
-    await exec(`rm ${path}`)
   }
 
   /**
@@ -92,21 +87,36 @@ class ChongdingHelper {
     const base64Image = image.toString("base64")
     // const result = await this.ocrClient.accurateBasic(base64Image, OCR_OPTIONS)
     const result = await this.ocrClient.generalBasic(base64Image, OCR_OPTIONS)
-    return result.words_result.map(res => res.words).join('')
+    return result.words_result
   }
 
   /**
-   * ocr question
+   * ocr Image
    *
-   * @param {object} image jimp imgae object
+   * @param {object} image jimp imgae
+   * @param {object} option region option(x, y, width, height)
    * @returns {string} question string
    */
-  async ocrQuestion(image) {
-    const { question: questionOption } = this.config
+  async ocrImage(image, option) {
+    const region = await this.imageCrop(image, option)
+    const result = await this.ocr(region)
+    return result
+  }
 
-    const questionImage = await this.imageCrop(image, questionOption)
-    const question = await this.ocr(questionImage)
-    return question
+  async analyzeChoices(question, choices) {
+    const url = BAIDU_ZHIDAO_URL + question
+    await this.puppeteer.page.goto(url)
+    const html = await this.puppeteer.page.content()
+    const text = cheerio.load(html).text().replace(/^\s+|\s+$/gm, '')
+
+    const result = choices.map(choice => {
+      const matchRes = text.match(new RegExp(choice, 'g')) || []
+      return {
+        name: choice,
+        count: matchRes.length
+      }
+    })
+    return result
   }
 
   /**
@@ -115,37 +125,62 @@ class ChongdingHelper {
    * @returns {undefined}
    */
   async run() {
-    console.time('screenshot')
     const screenshot = await this.screencap()
-
-    console.timeEnd('screenshot')
     const image = await jimp.read(screenshot)
 
-    console.time('ocr')
-    const question = await this.ocrQuestion(image)
-    console.timeEnd('ocr')
-    // open(BAIDU_ZHIDAO_URL + question)
+    const ocrQuestion = async () => {
+      const { question: questionOption } = this.config
+      const questionRes = await this.ocrImage(image.clone(), questionOption)
+      const question = questionRes.map(res => res.words).join('')
+      return question
+    }
 
-    await this.removeScreenshot(screenshot)
-    return question
+    const ocrChoices = async () => {
+      const { choices: choicesOption } = this.config
+      const choicesRes = await this.ocrImage(image.clone(), choicesOption)
+      const choices = choicesRes.map(res => res.words)
+      return choices
+    }
+
+    await Promise.all([
+      ocrQuestion(),
+      ocrChoices()
+    ]).then(async ([question, choices]) => {
+      console.log(`Question: ${question}`)
+
+      const results = await this.analyzeChoices(question, choices)
+      results.forEach(res => {
+        console.log(`Choice: ${res.name} - ${res.count}`)
+      })
+
+      const answer = (results.sort((a, b) => a.count < b.count))[0]
+      console.log(`Answer: 『${answer.name}』`)
+    })
   }
 }
 
 const c = new ChongdingHelper()
-c.screencap()
-  .then((path) => c.removeScreenshot(path))
+c.init()
+  .then(async () => {
+    // first time screencap will slow
+    c.screencap()
+  })
   .then(() => {
     keypress(process.stdin)
     console.log('[INFO]: Starting success..')
-    console.log('[HELP]: Press any key to run...')
+    console.log('[HELP]: Press enter key to run...')
 
     process.stdin.on('keypress', (ch, key) => {
       if (key && key.ctrl && key.name == 'c') {
-        process.stdin.pause()
-      } else {
+        c.close().then(() => {
+          process.stdin.pause()
+          process.exit(0)
+        })
+      } else if (key && key.name == 'return') {
         console.time('[TIME]')
-        c.run().then(question => {
-          console.log(`[INFO]: Question: ${question}`)
+        console.log('\n[INFO]: Running...')
+
+        c.run().then(() => {
           console.timeEnd('[TIME]')
         })
       }
@@ -154,5 +189,6 @@ c.screencap()
     process.stdin.setRawMode(true)
     process.stdin.resume()
   })
+
 
 
