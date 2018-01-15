@@ -1,14 +1,21 @@
-# chongding-helper
-冲顶大会答题辅助脚本，参考自 [TopSup](https://github.com/Skyexu/TopSup)
+# answer-auxiliary
+答题辅助脚本(冲顶大会, etc.)，参考自 [TopSup](https://github.com/Skyexu/TopSup)
 
 仅限于 Android 平台
+
+## 脚本原理
+- adb shell 获取 Android 设备上的截图
+- 百度 OCR 获取问题描述与选项
+- jieba 对问题进行分词
+- puppeteer 获取对于百度知道中的文字
+- 通过选择匹配统计百度知道中选项的出现频率
 
 ## 使用方式
 
 - 安装脚本依赖
 ```
 $ git clone --depth=1 https://github.com/ahonn/chongding-helper.git
-$ cd chongding-helper 
+$ cd chongding-helper
 $ yarn install # or npm install
 ```
 
@@ -20,10 +27,16 @@ $ touch config.yml
 内容如下：
 ```
 question:
-  x: 45 # 截图中问题区域左上角 x 坐标
-  y: 240 # 截图中问题区域左上角 y 坐标
-  width: 620 # 截图中问题区域宽度
-  height: 140 # 截图中问题区域高度
+  x: 45 # 问题区域左上角 x 坐标
+  y: 240 # 问题区域左上角 y 坐标
+  width: 620 # 问题区域宽度
+  height: 140 # 问题区域高度
+
+choices:
+  x: 45 # 选择区域左上角 x 坐标
+  y: 240 # 选择区域左上角 y 坐标
+  width: 620 # 选择区域宽度
+  height: 140 # 选择区域高度
 
 ocr:
   app_id: "API ID"
@@ -31,7 +44,7 @@ ocr:
   secret_key: "SECRET KEY"
 ```
 
-**问题区域具体坐标与宽高可通过开启 `开发者选项` -> `显示点按操作反馈` 与 `指针位置`, 并手动测量获得。**
+**问题与选择区域具体坐标与宽高可通过开启 `开发者选项` -> `显示点按操作反馈` 与 `指针位置`, 并手动测量获得。**
 
 **API ID 与 API KEY 等，需要通过创建[百度 OCR](https://cloud.baidu.com/product/ocr/general) 应用获得**
 
@@ -50,5 +63,3 @@ $ adb devices
 ```
 $ node ./index.js
 ```
-
-脚本运行后按任意键获取 Android 设备截图，通过百度 OCR 获取问题描述，并自动打开浏览器搜索问题（百度知道搜索）

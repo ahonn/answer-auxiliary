@@ -17,7 +17,7 @@ const OCR_OPTIONS = {
 
 const BAIDU_ZHIDAO_URL = `https://zhidao.baidu.com/search?word=`
 
-class ChongdingHelper {
+class AnswerAuxiliary {
   constructor() {
     this.timestamp = Date.now()
     this.config = null
@@ -182,11 +182,11 @@ class ChongdingHelper {
   }
 }
 
-const c = new ChongdingHelper()
-c.init()
+const a = new AnswerAuxiliary()
+a.init()
   .then(async () => {
     // first time screencap will slow
-    c.screencap()
+    a.screencap()
   })
   .then(() => {
     keypress(process.stdin)
@@ -195,7 +195,7 @@ c.init()
 
     process.stdin.on('keypress', (ch, key) => {
       if (key && key.ctrl && key.name == 'c') {
-        c.close().then(() => {
+        a.close().then(() => {
           process.stdin.pause()
           process.exit(0)
         })
@@ -203,7 +203,7 @@ c.init()
         console.time('[TIME]')
         console.log('\n[INFO]: Running...')
 
-        c.run().then(() => {
+        a.run().then(() => {
           console.timeEnd('[TIME]')
         })
       }
