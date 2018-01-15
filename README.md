@@ -1,5 +1,5 @@
 # answer-auxiliary
-答题辅助脚本(冲顶大会, etc.)，参考自 [TopSup](https://github.com/Skyexu/TopSup)
+答题辅助脚本(冲顶大会, 芝士超人, etc.)，参考自 [TopSup](https://github.com/Skyexu/TopSup)
 
 仅限于 Android 平台
 
@@ -8,7 +8,6 @@
 ## 脚本原理
 - adb shell 获取 Android 设备上的截图
 - 百度 OCR 获取问题描述与选项
-- jieba 对问题进行分词
 - puppeteer 获取百度搜索结果
 - 统计百度知道中选项的出现频率
 
