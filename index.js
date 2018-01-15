@@ -15,7 +15,7 @@ const OCR_OPTIONS = {
   "language_type": "CHN_ENG",
 }
 
-const BAIDU_ZHIDAO_URL = `https://zhidao.baidu.com/search?word=`
+const BAIDU_URL = 'https://www.baidu.com/s?wd='
 
 class AnswerAuxiliary {
   constructor() {
@@ -103,16 +103,7 @@ class AnswerAuxiliary {
     const { question: questionOption } = this.config
     const questionRes = await this.ocrImage(image.clone(), questionOption)
 
-    const text = questionRes.map(res => res.words).join('')
-    // remove order number and special symbols
-    const pureText = text.replace(/^\d+/, '')
-                         .replace(/[《》]/g, '')
-
-    const keyword = jieba.extract(pureText, 5)
-    const question = {
-      text,
-      keyword,
-    }
+    const question = questionRes.map(res => res.words).join('')
     return question
   }
 
@@ -141,8 +132,7 @@ class AnswerAuxiliary {
    * @returns {array} choice result array
    */
   async analyzeChoices(question, choices) {
-    const search = question.keyword.map(res => res.word).join(' ')
-    const url = BAIDU_ZHIDAO_URL + search
+    const url = BAIDU_URL + question
 
     await this.puppeteer.page.goto(url)
     const html = await this.puppeteer.page.content()
@@ -172,7 +162,7 @@ class AnswerAuxiliary {
       this.ocrQuestion(image.clone()),
       this.ocrChoices(image.clone()),
     ]).then(async ([question, choices]) => {
-      console.log(`Question: ${question.text}`)
+      console.log(`Question: ${question}`)
 
       const results = await this.analyzeChoices(question, choices)
       results.forEach(res => {
