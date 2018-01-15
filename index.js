@@ -13,7 +13,7 @@ const OCR_OPTIONS = {
   "language_type": "CHN_ENG",
 }
 
-const BAIDU_ZHIDAO_URL = `https://www.baidu.com/s?wd=site:zhidao.baidu.com `
+const BAIDU_ZHIDAO_URL = `https://zhidao.baidu.com/search?word=`
 
 class ChongdingHelper {
   constructor() {
@@ -51,11 +51,10 @@ class ChongdingHelper {
    */
   async screencap() {
     const screenshotName = `screenshot-${this.timestamp}.png`
+    const screenshotPath = path.join(__dirname, screenshotName)
 
-    await exec(`adb shell screencap -p /sdcard/${screenshotName}`)
-    await exec(`adb pull /sdcard/${screenshotName} ${__dirname}`)
-    await exec(`adb shell rm /sdcard/${screenshotName}`)
-    return path.join(__dirname, screenshotName)
+    await exec(`adb shell screencap -p > ${screenshotPath}`)
+    return screenshotPath
   }
 
   /**
@@ -91,10 +90,17 @@ class ChongdingHelper {
    */
   async ocr(image) {
     const base64Image = image.toString("base64")
+    // const result = await this.ocrClient.accurateBasic(base64Image, OCR_OPTIONS)
     const result = await this.ocrClient.generalBasic(base64Image, OCR_OPTIONS)
-    return result.words_result.map(res => res.words).join('').replace(/^\d+./, '')
+    return result.words_result.map(res => res.words).join('')
   }
 
+  /**
+   * ocr question
+   *
+   * @param {object} image jimp imgae object
+   * @returns {string} question string
+   */
   async ocrQuestion(image) {
     const { question: questionOption } = this.config
 
@@ -109,37 +115,44 @@ class ChongdingHelper {
    * @returns {undefined}
    */
   async run() {
-    console.time('[TIME]')
-
+    console.time('screenshot')
     const screenshot = await this.screencap()
+
+    console.timeEnd('screenshot')
     const image = await jimp.read(screenshot)
 
+    console.time('ocr')
     const question = await this.ocrQuestion(image)
-    open(BAIDU_ZHIDAO_URL + question)
+    console.timeEnd('ocr')
+    // open(BAIDU_ZHIDAO_URL + question)
 
     await this.removeScreenshot(screenshot)
-
-    console.timeEnd('[TIME]')
     return question
   }
 }
 
-keypress(process.stdin)
 const c = new ChongdingHelper()
-console.log('[INFO]: Starting success..')
-console.log('[HELP]: Press any key to run...')
+c.screencap()
+  .then((path) => c.removeScreenshot(path))
+  .then(() => {
+    keypress(process.stdin)
+    console.log('[INFO]: Starting success..')
+    console.log('[HELP]: Press any key to run...')
 
-process.stdin.on('keypress', (ch, key) => {
-  if (key && key.ctrl && key.name == 'c') {
-    process.stdin.pause()
-  } else {
-    c.run().then(question => {
-      console.log(`[INFO]: Question: ${question}`)
+    process.stdin.on('keypress', (ch, key) => {
+      if (key && key.ctrl && key.name == 'c') {
+        process.stdin.pause()
+      } else {
+        console.time('[TIME]')
+        c.run().then(question => {
+          console.log(`[INFO]: Question: ${question}`)
+          console.timeEnd('[TIME]')
+        })
+      }
     })
-  }
-})
- 
-process.stdin.setRawMode(true)
-process.stdin.resume()
+
+    process.stdin.setRawMode(true)
+    process.stdin.resume()
+  })
 
 
