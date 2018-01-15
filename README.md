@@ -9,7 +9,7 @@
 - adb shell 获取 Android 设备上的截图
 - 百度 OCR 获取问题描述与选项
 - jieba 对问题进行分词
-- puppeteer 获取百度知道页面数据
+- puppeteer 获取百度搜索结果
 - 统计百度知道中选项的出现频率
 
 ## 使用方式
