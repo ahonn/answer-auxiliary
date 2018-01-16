@@ -10,6 +10,7 @@
     "baidu-aip-sdk": "^2.1.0",
     "cheerio": "^1.0.0-rc.2",
     "child-process-promise": "^2.2.1",
+    "colors": "^1.1.2",
     "html-to-text": "^3.3.0",
     "jimp": "^0.2.28",
     "js-yaml": "^3.10.0",

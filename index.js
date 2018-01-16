@@ -4,6 +4,7 @@ const fs = require('fs')
 const path = require('path')
 const yaml = require('js-yaml')
 const jimp = require('jimp')
+const colors = require('colors')
 const keypress = require('keypress')
 const cheerio = require('cheerio')
 const jieba = require("nodejieba")
@@ -15,14 +16,15 @@ const OCR_OPTIONS = {
   "language_type": "CHN_ENG",
 }
 
-const BAIDU_URL = 'https://www.baidu.com/s?wd='
+const SEARCH_URL = 'https://zhidao.baidu.com/search?word='
+// const SEARCH_URL = 'https://www.baidu.com/s?wd='
 
 class AnswerAuxiliary {
   constructor() {
     this.timestamp = Date.now()
     this.config = null
     this.ocrClient = null
-    this.puppeteer = null
+    this.browser = null
   }
 
   async init() {
@@ -35,19 +37,14 @@ class AnswerAuxiliary {
     this.ocrClient = new OcrClient(app_id, app_key, secret_key)
 
     // init puppeteer browser page
-    const browser = await puppeteer.launch()
-    const page = await browser.newPage()
-    this.puppeteer = {
-      browser,
-      page
-    }
+    this.browser = await puppeteer.launch()
   }
 
   async close() {
     try {
       await exec('rm screenshot-*')
     } catch (e) {}
-    await this.puppeteer.browser.close()
+    await this.browser.close()
   }
 
   /**
@@ -90,6 +87,10 @@ class AnswerAuxiliary {
     const base64Image = region.toString("base64")
     // const result = await this.ocrClient.accurateBasic(base64Image, OCR_OPTIONS)
     const result = await this.ocrClient.generalBasic(base64Image, OCR_OPTIONS)
+    if (result.error_code) {
+      console.error(result.error_msg)
+      process.exit(0)
+    }
     return result.words_result
   }
 
@@ -125,6 +126,22 @@ class AnswerAuxiliary {
   }
 
   /**
+   * search
+   *
+   * @param {string} url search url
+   * @param {string} [query=''] query string
+   * @returns {string}
+   */
+  async search(url, query = '') {
+    const page = await this.browser.newPage()
+    await page.goto(url + query)
+    const html = await page.content()
+    // strip html and trailing white spaces
+    const text = cheerio.load(html).text().replace(/^\s+|\s+$/gm, '')
+    return text
+  }
+
+  /**
    * analyze choices by baidu zhidao
    *
    * @param {object} question
@@ -132,21 +149,24 @@ class AnswerAuxiliary {
    * @returns {array} choice result array
    */
   async analyzeChoices(question, choices) {
-    const url = BAIDU_URL + question
+    const url = SEARCH_URL + question
 
-    await this.puppeteer.page.goto(url)
-    const html = await this.puppeteer.page.content()
-    // strip html and trailing white spaces
-    const text = cheerio.load(html).text().replace(/^\s+|\s+$/gm, '')
+    return await Promise.all([
+      this.search(url),
+      this.search(url, '&pn=10'),
+    ]).then(([text1, text2]) => {
+      const text = text1 + text2
 
-    const result = choices.map(choice => {
-      const matchRes = text.match(new RegExp(choice, 'g')) || []
-      return {
-        name: choice,
-        count: matchRes.length
-      }
+      const result = choices.map(choice => {
+        const matchRes = text.match(new RegExp(choice, 'g')) || []
+        return {
+          name: choice,
+          count: matchRes.length
+        }
+      })
+
+      return result
     })
-    return result
   }
 
   /**
@@ -162,12 +182,17 @@ class AnswerAuxiliary {
       this.ocrQuestion(image.clone()),
       this.ocrChoices(image.clone()),
     ]).then(async ([question, choices]) => {
-      console.log(`Question: ${question}`)
+      console.log(`Question: ${question.yellow}`)
 
       const results = await this.analyzeChoices(question, choices)
-      results.forEach(res => {
+      results.forEach((res, i) => {
         console.log(`Choice: ${res.name} - ${res.count}`)
       })
+
+      const sortResult = results.sort((a, b) => a.count < b.count)
+      const mostAnswer = sortResult[0]
+      const lessAnswer = sortResult[sortResult.length - 1]
+      console.log('Answer: ' + mostAnswer.name.cyan + ' ' + lessAnswer.name.red)
     })
   }
 }
