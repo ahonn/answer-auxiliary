@@ -1,19 +1,19 @@
-"use strict"
-
+/* eslint-disable no-console */
 const fs = require('fs')
 const path = require('path')
 const yaml = require('js-yaml')
 const jimp = require('jimp')
-const colors = require('colors')
 const keypress = require('keypress')
 const cheerio = require('cheerio')
-const jieba = require("nodejieba")
-const exec = require('child-process-promise').exec
-const OcrClient = require("baidu-aip-sdk").ocr
+const jieba = require('nodejieba')
+const {
+  exec,
+} = require('child-process-promise')
+const OcrClient = require('baidu-aip-sdk').ocr
 const puppeteer = require('puppeteer')
 
 const OCR_OPTIONS = {
-  "language_type": "CHN_ENG",
+  language_type: 'CHN_ENG',
 }
 
 const SEARCH_URL = 'https://zhidao.baidu.com/search?word='
@@ -33,7 +33,11 @@ class AnswerAuxiliary {
     this.config = yaml.safeLoad(fs.readFileSync(configPath, 'utf-8'))
 
     // init ocr client
-    const { app_id, app_key, secret_key } = this.config.ocr
+    const {
+      app_id,
+      app_key,
+      secret_key,
+    } = this.config.ocr
     this.ocrClient = new OcrClient(app_id, app_key, secret_key)
 
     // init puppeteer browser page
@@ -43,7 +47,7 @@ class AnswerAuxiliary {
   async close() {
     try {
       await exec('rm screenshot-*')
-    } catch (e) {}
+    } catch (e) {} // eslint-disable-line
     await this.browser.close()
   }
 
@@ -61,21 +65,6 @@ class AnswerAuxiliary {
   }
 
   /**
-   * crop image
-   *
-   * @param {string} screenshot screenshot path
-   * @param {object} option crop option
-   * @returns {string} image base64
-   */
-  async imageCrop(image, option) {
-    image.crop(option.x, option.y, option.width, option.height)
-
-    return new Promise((resolve) => {
-      image.getBuffer(jimp.AUTO, (err, data) => {resolve(data)})
-    })
-  }
-
-  /**
    * ocr image (Baidu Api)
    *
    * @param {object} image jimp imgae
@@ -83,8 +72,15 @@ class AnswerAuxiliary {
    * @returns {string} ocr result
    */
   async ocrImage(image, option) {
-    const region = await this.imageCrop(image, option)
-    const base64Image = region.toString("base64")
+    image.crop(option.x, option.y, option.width, option.height)
+
+    const region = await new Promise((resolve) => {
+      image.getBuffer(jimp.AUTO, (err, data) => {
+        resolve(data)
+      })
+    })
+
+    const base64Image = region.toString('base64')
     // const result = await this.ocrClient.accurateBasic(base64Image, OCR_OPTIONS)
     const result = await this.ocrClient.generalBasic(base64Image, OCR_OPTIONS)
     if (result.error_code) {
@@ -101,7 +97,9 @@ class AnswerAuxiliary {
    * @returns {object} question(text, keyword)
    */
   async ocrQuestion(image) {
-    const { question: questionOption } = this.config
+    const {
+      question: questionOption,
+    } = this.config
     const questionRes = await this.ocrImage(image.clone(), questionOption)
 
     const question = questionRes.map(res => res.words).join('')
@@ -115,7 +113,9 @@ class AnswerAuxiliary {
    * @returns {array} choice array
    */
   async ocrChoices(image) {
-    const { choices: choicesOption } = this.config
+    const {
+      choices: choicesOption,
+    } = this.config
     const choicesRes = await this.ocrImage(image.clone(), choicesOption)
 
     let choices = choicesRes.map(res => res.words)
@@ -151,7 +151,7 @@ class AnswerAuxiliary {
   async analyzeChoices(question, choices) {
     const url = SEARCH_URL + question
 
-    return await Promise.all([
+    const res = await Promise.all([
       this.search(url),
       this.search(url, '&pn=10'),
     ]).then(([text1, text2]) => {
@@ -161,12 +161,14 @@ class AnswerAuxiliary {
         const matchRes = text.match(new RegExp(choice, 'g')) || []
         return {
           name: choice,
-          count: matchRes.length
+          count: matchRes.length,
         }
       })
 
       return result
     })
+
+    return res
   }
 
   /**
@@ -185,14 +187,14 @@ class AnswerAuxiliary {
       console.log(`Question: ${question.yellow}`)
 
       const results = await this.analyzeChoices(question, choices)
-      results.forEach((res, i) => {
+      results.forEach((res) => {
         console.log(`Choice: ${res.name} - ${res.count}`)
       })
 
       const sortResult = results.sort((a, b) => a.count < b.count)
       const mostAnswer = sortResult[0]
       const lessAnswer = sortResult[sortResult.length - 1]
-      console.log('Answer: ' + mostAnswer.name.cyan + ' ' + lessAnswer.name.red)
+      console.log(`Answer: ${mostAnswer.name.cyan} ${lessAnswer.name.red}`)
     })
   }
 }
@@ -209,12 +211,12 @@ a.init()
     console.log('[HELP]: Press enter key to run...')
 
     process.stdin.on('keypress', (ch, key) => {
-      if (key && key.ctrl && key.name == 'c') {
+      if (key && key.ctrl && key.name === 'c') {
         a.close().then(() => {
           process.stdin.pause()
           process.exit(0)
         })
-      } else if (key && key.name == 'return') {
+      } else if (key && key.name === 'return') {
         console.time('[TIME]')
         console.log('\n[INFO]: Running...')
 
@@ -227,4 +229,3 @@ a.init()
     process.stdin.setRawMode(true)
     process.stdin.resume()
   })
-
